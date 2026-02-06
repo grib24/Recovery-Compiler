@@ -38,28 +38,31 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
-    - name: Cleanup
-      uses: rokibhasansagar/slim_machine@main
-
-    - name: Build
+    - name: Install build tools
       run: |
-        docker run --rm -v $(pwd):/work -w /work ubuntu:20.04 /bin/bash -c "
-        apt-get update && apt-get install -y git python3 python3-pip zip
-        pip3 install --upgrade pip
-        git config --global user.email 'grib24@github.com'
-        git config --global user.name 'grib24'
-        git clone https://github.com /scripts && cd /scripts && bash setup/android_build_env.sh && cd ..
+        sudo apt-get update
+        sudo apt-get install -y bc build-essential zip curl libc6-dev libncurses5-dev libssl-dev pandas python3 python3-pip git repo
+
+    - name: Build TWRP
+      run: |
+        git config --global user.email "grib24@github.com"
+        git config --global user.name "grib24"
         mkdir twrp && cd twrp
         repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
-        repo sync -j$(nproc --all) --force-sync
+        repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         lunch ${{ github.event.inputs.MAKEFILE_NAME }}-${{ github.event.inputs.DEVICE_NAME }}-eng
         make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
-        "
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: TWRP-VendorBoot
+        path: twrp/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/vendor_boot.img
