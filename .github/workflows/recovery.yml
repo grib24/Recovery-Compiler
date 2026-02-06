@@ -30,7 +30,7 @@ on:
       MAKEFILE_NAME:
         description: 'MAKEFILE_NAME'
         required: true
-        default: 'twrp_ussi_arm64'
+        default: 'twrp'
       BUILD_TARGET:
         description: 'BUILD_TARGET'
         required: true
