@@ -68,7 +68,7 @@ jobs:
         git config --global user.name "grib24"
         mkdir twrp && cd twrp
         /usr/local/bin/repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
-        /usr/local/bin/repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+        /usr/local/bin/repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
