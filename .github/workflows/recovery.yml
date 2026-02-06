@@ -62,7 +62,7 @@ jobs:
         make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: TWRP-VendorBoot
         path: twrp/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/vendor_boot.img
