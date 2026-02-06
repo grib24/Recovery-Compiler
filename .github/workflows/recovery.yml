@@ -45,13 +45,11 @@ jobs:
 
     - name: Install build tools
       run: |
-            - name: Install build tools
-      run: |
         sudo apt-get update
         sudo apt-get install -y bc build-essential zip curl libc6-dev libncurses5-dev libssl-dev python3 python3-pip git
         sudo curl https://storage.googleapis.com -o /usr/local/bin/repo
         sudo chmod a+x /usr/local/bin/repo
-        
+
     - name: Build TWRP
       run: |
         git config --global user.email "grib24@github.com"
