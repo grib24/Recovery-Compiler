@@ -1,0 +1,65 @@
+name: Recovery Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      MANIFEST_URL:
+        description: 'MANIFEST_URL'
+        required: true
+        default: 'https://github.com'
+      MANIFEST_BRANCH:
+        description: 'MANIFEST_BRANCH'
+        required: true
+        default: 'twrp-12.1'
+      DEVICE_TREE_URL:
+        description: 'DEVICE_TREE_URL'
+        required: true
+        default: 'https://github.com'
+      DEVICE_TREE_BRANCH:
+        description: 'DEVICE_TREE_BRANCH'
+        required: true
+        default: 'main'
+      DEVICE_PATH:
+        description: 'DEVICE_PATH'
+        required: true
+        default: 'device/realme/ussi_arm64'
+      DEVICE_NAME:
+        description: 'DEVICE_NAME'
+        required: true
+        default: 'ussi_arm64'
+      MAKEFILE_NAME:
+        description: 'MAKEFILE_NAME'
+        required: true
+        default: 'omni_ussi_arm64'
+      BUILD_TARGET:
+        description: 'BUILD_TARGET'
+        required: true
+        default: 'vendorboot'
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Cleanup
+      uses: rokibhasansagar/slim_machine@main
+
+    - name: Build
+      run: |
+        docker run --rm -v $(pwd):/work -w /work ubuntu:20.04 /bin/bash -c "
+        apt-get update && apt-get install -y git python3 python3-pip zip
+        pip3 install --upgrade pip
+        git config --global user.email 'grib24@github.com'
+        git config --global user.name 'grib24'
+        git clone https://github.com /scripts && cd /scripts && bash setup/android_build_env.sh && cd ..
+        mkdir twrp && cd twrp
+        repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
+        repo sync -j$(nproc --all) --force-sync
+        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
+        source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-${{ github.event.inputs.DEVICE_NAME }}-eng
+        make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        "
