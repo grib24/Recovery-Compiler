@@ -1,46 +1,58 @@
 # Recovery-Compiler 🤖
 
-This GitHub Action Let's You Compile Recovery For Android Devices.
+GitHub Actions workflow для сборки TWRP Recovery для Android-устройств.
+Работает как вручную (через вкладку **Actions**), так и как Composite Action
+из другого workflow.
 
-## Features 📜
+## Возможности 📜
 
- - Let's you Compile Without Any Hassle Of Setting Up Environment.
- - Just Setup Env Variables & Everything Is Automated.
+- Полная сборка TWRP без локальной настройки окружения.
+- Поддержка Android 11 / 12.1 / 14.1 (манифесты `twrp-11.0`, `twrp-12.1`, `twrp-14.1`).
+- Автоматическая сборка в `vendor_boot.img` для устройств без отдельного раздела `recovery` (A/B, GKI, Unisoc UMS9230 и др.).
+- Публикация результата в **GitHub Releases** (постоянные ссылки, не артефакты на 90 дней).
+- Встроенный swap 24 ГБ и очистка диска — сборка не падает по OOM.
 
+## Требования ✋
 
-## Notes ✋
+- Runner: `ubuntu-22.04` (в workflow прописан явно, `ubuntu-latest` тоже подойдёт, но может измениться в будущем).
+- Дерево устройства должно поддерживать формат `lunch twrp_<codename>-ap2a-eng` для Android 14+ или `twrp_<codename>-eng` для более старых веток.
 
-There is Only Support For `ubuntu-20.04` also Known As `ubuntu-latest`
+## Использование через Actions (рекомендуется) 👨‍💻
 
-PATH for Compiled Recovery is `/home/runner/work/out/target/product/*/*.img , *.zip`
+1. Форкните репозиторий или создайте свой с `.github/workflows/twrp.yml` из этого репо.
+2. Перейдите в **Actions** → выберите workflow **Recovery Build** → **Run workflow**.
+3. Заполните параметры:
 
-For Orangefox android V10 Use `orangefox` in `MANIFEST` `/home/runner/work/out/target/product/*/*.img , *.zip`
-            
-Caution :- `orangefox` term is Only For Android10 based devices aka dynamic devices
+| Параметр | Описание | Пример |
+|---|---|---|
+| `MANIFEST_URL` | URL манифеста TWRP | `https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp` |
+| `MANIFEST_BRANCH` | Ветка манифеста | `twrp-14.1` (Android 14+), `twrp-12.1`, `twrp-11.0` |
+| `DEVICE_TREE_URL` | URL вашего дерева устройства | `https://github.com/grib24/twrp_device_realme_RE6054` |
+| `DEVICE_TREE_BRANCH` | Ветка дерева | `main` |
+| `DEVICE_PATH` | Путь для клонирования дерева | `device/realme/RE6054` |
+| `DEVICE_NAME` | Кодовое имя устройства | `RE6054` |
+| `MAKEFILE_NAME` | Префикс продукта | `twrp` |
+| `BUILD_TARGET` | Что собирать | `vendorboot` (A/B + vendor_boot), `boot` (без раздела recovery), `recovery` (старые устройства) |
 
-For Android 9 devices you can use Manifest
+4. После завершения результат появится в разделе **Releases** репозитория с тегом `twrp-<run_id>`.
+5. Внутри релиза:
+   - `vendor_boot.img` / `boot.img` / `recovery.img` — образы (в зависимости от `BUILD_TARGET`).
+   - Описание сборки: ветка манифеста, ссылка на дерево, коммит.
 
-## Usage 👨‍💻
+## Использование как Composite Action
+
+Если вы хотите вызывать сборку из **другого** workflow, используйте `action.yml`:
 
 ```yaml
 - name: Recovery Compilation
-  uses: CarbonatedBlack/Recovery-Compiler@production
+  uses: grib24/Recovery-Compiler@beta
   env:
-    MANIFEST: "Recovery Manifest URL with -b branch" or "orangefox" for orangefox android v10
-    DT_LINK: "Your Device Tree Link"
-    VENDOR: "Your Device's Vendor name as in used inside DT. Example: xiaomi, samsung, asus, etc."
-    CODENAME: "Your Device's Codename as in used inside DT. Example: nikel, phoenix, ginkgo, etc."
-    KERNEL_LINK: "Kernel repo link with optional -b branch. If not filled it would be detected as prebuilt"
-    TARGET: "Set as recoveryimage or bootimage if no recovery partition avaiable"
-    FLAVOR: "eng or userdebug"
-    EXTRA_CMD: "if you want to Execute any external Command Before Compilation Starts"
-    TZ: "Asia/Kolkata" # Set Time-Zone According To Your Region
-```
-
-## Credits 🥰
-
-[rokibhasansagar](https://github.com/rokibhasansagar) For His Cleanup Scripts And Great Help
-
-## License 🔖
-
-Licensed Under [GPLV3](https://github.com/Carbonatedblack/Recovery-Compiler/blob/production/LICENSE)
+    MANIFEST: "https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp -b twrp-14.1"
+    DT_LINK: "https://github.com/grib24/twrp_device_realme_RE6054 -b main"
+    VENDOR: "realme"
+    CODENAME: "RE6054"
+    KERNEL_LINK: ""
+    TARGET: "vendorbootimage"
+    FLAVOR: "eng"
+    EXTRA_CMD: ""
+    TZ: "Europe/Moscow"
