@@ -14,7 +14,7 @@ on:
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
         required: true
-        default: 'https://github.com/grib24/android_device_realme_ussi_arm64'
+        default: 'https://github.com/grib24/twrp_device_realme_RE6054'
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
@@ -22,11 +22,11 @@ on:
       DEVICE_PATH:
         description: 'DEVICE_PATH'
         required: true
-        default: 'device/realme/ussi_arm64'
+        default: 'device/realme/RE6054'
       DEVICE_NAME:
         description: 'DEVICE_NAME'
         required: true
-        default: 'ussi_arm64'
+        default: 'RE6054'
       MAKEFILE_NAME:
         description: 'MAKEFILE_NAME'
         required: true
@@ -72,7 +72,11 @@ jobs:
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-${{ github.event.inputs.DEVICE_NAME }}-eng
+        if [[ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "twrp-14.1" ]]; then
+          lunch ${{ github.event.inputs.MAKEFILE_NAME }}_${{ github.event.inputs.DEVICE_NAME }}-ap2a-eng
+        else
+          lunch ${{ github.event.inputs.MAKEFILE_NAME }}_${{ github.event.inputs.DEVICE_NAME }}-eng
+        fi
         make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
 
     - name: Upload Artifact
