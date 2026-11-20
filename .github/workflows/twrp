@@ -1,0 +1,113 @@
+name: Recovery Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      MANIFEST_URL:
+        description: 'MANIFEST_URL'
+        required: true
+        default: 'https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp'
+      MANIFEST_BRANCH:
+        description: 'MANIFEST_BRANCH'
+        required: true
+        default: 'twrp-14.1'
+      DEVICE_TREE_URL:
+        description: 'DEVICE_TREE_URL'
+        required: true
+        default: 'https://github.com/grib24/twrp_device_realme_RE6054'
+      DEVICE_TREE_BRANCH:
+        description: 'DEVICE_TREE_BRANCH'
+        required: true
+        default: 'main'
+      DEVICE_PATH:
+        description: 'DEVICE_PATH'
+        required: true
+        default: 'device/realme/RE6054'
+      DEVICE_NAME:
+        description: 'DEVICE_NAME'
+        required: true
+        default: 'RE6054'
+      MAKEFILE_NAME:
+        description: 'MAKEFILE_NAME'
+        required: true
+        default: 'twrp'
+      BUILD_TARGET:
+        description: 'BUILD_TARGET'
+        required: true
+        default: 'vendorboot'
+        type: choice
+        options:
+        - boot
+        - recovery
+        - vendorboot
+
+jobs:
+  build:
+    name: Build TWRP by ${{ github.actor }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Clean-up
+      uses: rokibhasansagar/slimhub_actions@main
+
+    - name: Swap Space
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 24
+
+    - name: Install build tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc build-essential zip curl libc6-dev libncurses5-dev libssl-dev python3 python3-pip git aria2
+        curl -L https://storage.googleapis.com/git-repo-downloads/repo > repo
+        chmod a+x repo
+        sudo mv repo /usr/local/bin/repo
+
+    - name: Build TWRP
+      run: |
+        git config --global user.email "grib24@github.com"
+        git config --global user.name "grib24"
+        mkdir twrp && cd twrp
+        /usr/local/bin/repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
+        /usr/local/bin/repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch
+        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
+        cd ${{ github.event.inputs.DEVICE_PATH }}
+        echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
+        cd ${GITHUB_WORKSPACE}/twrp
+        source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        if [[ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "twrp-14.1" ]]; then
+          lunch ${{ github.event.inputs.MAKEFILE_NAME }}_${{ github.event.inputs.DEVICE_NAME }}-ap2a-eng
+        else
+          lunch ${{ github.event.inputs.MAKEFILE_NAME }}_${{ github.event.inputs.DEVICE_NAME }}-eng
+        fi
+        make clean
+        mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j4
+
+    - name: Set Release Properties
+      run: |
+        echo "BUILD_DATE=$(TZ=Asia/Manila date +%Y%m%d)" >> $GITHUB_ENV
+        DEVICE_TREE_URL="${{ github.event.inputs.DEVICE_TREE }}"
+        if [[ "${DEVICE_TREE_URL}" == *.git ]]; then
+          DEVICE_TREE_URL="${DEVICE_TREE_URL%.git}"
+        fi
+        echo "DEVICE_TREE_URL=${DEVICE_TREE_URL}" >> $GITHUB_ENV
+
+    - name: Upload to Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          twrp/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/vendor_boot.img
+          twrp/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/boot.img
+          twrp/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
+        name: TWRP Recovery for ${{ github.event.inputs.DEVICE_NAME }} // ${{ env.BUILD_DATE }}
+        tag_name: twrp-${{ github.run_id }}
+        body: |
+          ## TWRP Recovery Build - Unofficial
+          Build: ${{ github.event.inputs.MANIFEST_BRANCH }}
+          Device: [Device Tree/Branch](${{ env.DEVICE_TREE_URL }}/tree/${{ github.event.inputs.DEVICE_TREE_BRANCH }})
+          Commit: Most recent [commit](${{ env.DEVICE_TREE_URL }}/commit/${{ env.COMMIT_ID }}) during building.
