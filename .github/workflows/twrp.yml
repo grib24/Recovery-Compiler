@@ -6,7 +6,7 @@ on:
       MANIFEST_URL:
         description: 'MANIFEST_URL'
         required: true
-        default: 'https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp'
+        default: 'https://github.com'
       MANIFEST_BRANCH:
         description: 'MANIFEST_BRANCH'
         required: true
@@ -14,7 +14,7 @@ on:
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
         required: true
-        default: 'https://github.com/grib24/twrp_device_realme_RE6054'
+        default: 'https://github.com'
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
@@ -63,7 +63,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y bc build-essential zip curl libc6-dev libncurses5-dev libssl-dev python3 python3-pip git aria2
-        curl -L https://storage.googleapis.com/git-repo-downloads/repo > repo
+        curl -L https://googleapis.com > repo
         chmod a+x repo
         sudo mv repo /usr/local/bin/repo
 
@@ -74,6 +74,44 @@ jobs:
         mkdir twrp && cd twrp
         /usr/local/bin/repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
         /usr/local/bin/repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch
+
+        # Patch bootable/recovery/libtar for twrp-14.1 fscrypt_policy_v1 API compatibility
+        python3 - << 'EOF'
+        import glob, re
+
+        hdr_path = "bootable/recovery/libtar/libtar.h"
+        with open(hdr_path, "r") as f:
+            hdr = f.read()
+
+        compat = """
+        #include <linux/fscrypt.h>
+        #include <stdint.h>
+        #include <stddef.h>
+        #ifdef fscrypt_policy
+        #undef fscrypt_policy
+        #endif
+        typedef struct fscrypt_policy_v1 fscrypt_policy;
+        static inline size_t fscrypt_policy_size(const fscrypt_policy *p) { (void)p; return sizeof(struct fscrypt_policy_v1); }
+        static inline void *get_policy(fscrypt_policy *p) { return (void *)p; }
+        static inline uint8_t *get_policy_descriptor(fscrypt_policy *p) { return p->master_key_descriptor; }
+        """
+
+        hdr = re.sub(r'(#include\s+<fscrypt/fscrypt\.h>)', r'\1\n' + compat, hdr, count=1)
+        if compat not in hdr:
+            hdr = compat + "\n" + hdr
+
+        with open(hdr_path, "w") as f:
+            f.write(hdr)
+
+        for cfile in glob.glob("bootable/recovery/libtar/*.c"):
+            with open(cfile, "r") as f:
+                txt = f.read()
+            if "libtar.h" not in txt:
+                txt = '#include "libtar.h"\n' + txt
+            with open(cfile, "w") as f:
+                f.write(txt)
+        EOF
+
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
         cd ${{ github.event.inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
@@ -90,8 +128,8 @@ jobs:
 
     - name: Set Release Properties
       run: |
-        echo "BUILD_DATE=$(TZ=Asia/Manila date +%Y%m%d)" >> $GITHUB_ENV
-        DEVICE_TREE_URL="${{ github.event.inputs.DEVICE_TREE }}"
+        echo "BUILD_DATE=$(TZ=Europe/Moscow date +%Y%m%d)" >> $GITHUB_ENV
+        DEVICE_TREE_URL="${{ github.event.inputs.DEVICE_TREE_URL }}"
         if [[ "${DEVICE_TREE_URL}" == *.git ]]; then
           DEVICE_TREE_URL="${DEVICE_TREE_URL%.git}"
         fi
@@ -100,6 +138,7 @@ jobs:
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
       with:
+        fail_on_unmatched_files: false
         files: |
           twrp/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/vendor_boot.img
         name: TWRP Recovery for ${{ github.event.inputs.DEVICE_NAME }} // ${{ env.BUILD_DATE }}
