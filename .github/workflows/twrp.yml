@@ -86,7 +86,7 @@ jobs:
           lunch ${{ github.event.inputs.MAKEFILE_NAME }}_${{ github.event.inputs.DEVICE_NAME }}-eng
         fi
         make clean
-        mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j4
+        mka adbd ${{ github.event.inputs.BUILD_TARGET }}image
 
     - name: Set Release Properties
       run: |
@@ -102,8 +102,6 @@ jobs:
       with:
         files: |
           twrp/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/vendor_boot.img
-          twrp/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/boot.img
-          twrp/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
         name: TWRP Recovery for ${{ github.event.inputs.DEVICE_NAME }} // ${{ env.BUILD_DATE }}
         tag_name: twrp-${{ github.run_id }}
         body: |
