@@ -76,7 +76,8 @@ jobs:
         /usr/local/bin/repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
         /usr/local/bin/repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch
 
-        # Patch bootable/recovery for twrp-14.1 fscrypt_policy_v2 and removed FDE cryptfs API
+
+        # Patch bootable/recovery for twrp-14.1 fscrypt_policy_v2 and full legacy FDE cryptfs API
         python3 - << 'EOF'
         import glob, re, os
 
@@ -145,40 +146,43 @@ jobs:
             with open(mk, "w") as f:
                 f.writelines(new_lines)
 
-        # Inject legacy FDE stubs into bootable/recovery C++ files (removed in Android 14)
+        # Full legacy cryptfs.h FDE stubs for all bootable/recovery C++ files
         fde_stubs = """
         #ifndef TWRP_FDE_COMPAT_STUBS
         #define TWRP_FDE_COMPAT_STUBS
         #ifdef __cplusplus
         extern "C" {
         #endif
+        static inline void set_partition_data(const char* blk_dev, const char* key_loc) { (void)blk_dev; (void)key_loc; }
+        static inline int cryptfs_check_footer(void) { return -1; }
         static inline int delete_crypto_blk_dev(const char* name) { (void)name; return 0; }
         static inline int cryptfs_get_password_type(void) { return 0; }
         static inline int cryptfs_check_passwd(const char* passwd) { (void)passwd; return -1; }
+        static inline int cryptfs_verify_passwd(const char* passwd) { (void)passwd; return -1; }
         static inline int cryptfs_restart(void) { return 0; }
         static inline int cryptfs_enable(const char* howarg, int type, const char* passwd, int no_ui) { (void)howarg; (void)type; (void)passwd; (void)no_ui; return -1; }
+        static inline int cryptfs_enable_default(const char* howarg, int no_ui) { (void)howarg; (void)no_ui; return -1; }
         static inline int cryptfs_changepw(int type, const char* newpw) { (void)type; (void)newpw; return -1; }
         static inline int cryptfs_setup_ext_volume(const char* label, const char* real_blkdev, const unsigned char* key, int keysize, char* out_crypto_blkdev) { (void)label; (void)real_blkdev; (void)key; (void)keysize; (void)out_crypto_blkdev; return -1; }
         static inline int cryptfs_revert_ext_volume(const char* label) { (void)label; return 0; }
         static inline int cryptfs_getfield(const char* fieldname, char* value, int len) { (void)fieldname; (void)value; (void)len; return -1; }
         static inline int cryptfs_setfield(const char* fieldname, const char* value) { (void)fieldname; (void)value; return -1; }
+        static inline int cryptfs_is_ice(void) { return 0; }
+        static inline int cryptfs_trigger_restart_framework(void) { return 0; }
+        static inline int cryptfs_trigger_restart_min_framework(void) { return 0; }
         #ifdef __cplusplus
         }
         #endif
         #endif
         """
-        for cpp in ["bootable/recovery/partition.cpp", "bootable/recovery/partitionmanager.cpp", "bootable/recovery/twrp-functions.cpp", "bootable/recovery/data.cpp"]:
-            if os.path.exists(cpp):
-                with open(cpp, "r") as f:
-                    c = f.read()
-                if "TWRP_FDE_COMPAT_STUBS" not in c:
-                    with open(cpp, "w") as f:
-                        f.write(fde_stubs + "\n" + c)
+        for cpp in glob.glob("bootable/recovery/**/*.cpp", recursive=True):
+            with open(cpp, "r", errors="ignore") as f:
+                c = f.read()
+            if "TWRP_FDE_COMPAT_STUBS" not in c:
+                with open(cpp, "w") as f:
+                    f.write(fde_stubs + "\n" + c)
         EOF
-
-
-
-        
+    
 
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
         cd ${{ github.event.inputs.DEVICE_PATH }}
