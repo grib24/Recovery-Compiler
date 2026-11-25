@@ -6,7 +6,7 @@ on:
       MANIFEST_URL:
         description: 'MANIFEST_URL'
         required: true
-        default: 'https://github.com'
+        default: 'https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp'
       MANIFEST_BRANCH:
         description: 'MANIFEST_BRANCH'
         required: true
@@ -14,7 +14,7 @@ on:
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
         required: true
-        default: 'https://github.com'
+        default: 'https://github.com/grib24/twrp_device_realme_RE6054'
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
@@ -62,8 +62,10 @@ jobs:
     - name: Install build tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc build-essential zip curl libc6-dev libncurses5-dev libssl-dev python3 python3-pip git aria2 repo
-        sudo ln -sf /usr/bin/repo /usr/local/bin/repo
+        sudo apt-get install -y bc build-essential zip curl libc6-dev libncurses5-dev libssl-dev python3 python3-pip git
+        curl -L https://storage.googleapis.com/git-repo-downloads/repo > repo
+        chmod a+x repo
+        sudo mv repo /usr/local/bin/repo
 
 
     - name: Build TWRP
