@@ -76,7 +76,7 @@ jobs:
         /usr/local/bin/repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
         /usr/local/bin/repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch
 
-        # Patch bootable/recovery/libtar for twrp-14.1 fscrypt_policy_v2 API compatibility
+        # Patch bootable/recovery/libtar for twrp-14.1 fscrypt_policy_v2 and missing symbols
         python3 - << 'EOF'
         import glob, re, os
 
@@ -118,20 +118,34 @@ jobs:
             with open(cfile, "w") as f:
                 f.write(txt)
 
+        # Create C++ stubs for the 5 unresolved symbols in libtar.so
+        stub_cpp = """
+        #include <stdarg.h>
+        #include <stdint.h>
+        extern "C" int async_safe_format_log(int prio, const char* tag, const char* fmt, ...) { (void)prio; (void)tag; (void)fmt; return 0; }
+        class NetlinkEvent { public: void dump(); const char* findParam(const char* paramName); };
+        void NetlinkEvent::dump() {}
+        const char* NetlinkEvent::findParam(const char*) { return nullptr; }
+        namespace android { namespace hal { class BootControlClient { public: static void* WaitForService(); }; void* BootControlClient::WaitForService() { return nullptr; } } }
+        namespace ndk { class SpAIBinder; }
+        namespace aidl { namespace android { namespace security { namespace maintenance { class IKeystoreMaintenance { public: static void* fromBinder(const ndk::SpAIBinder&); }; void* IKeystoreMaintenance::fromBinder(const ndk::SpAIBinder&) { return nullptr; } } } } }
+        """
+        with open("bootable/recovery/libtar/twrp_compat_stubs.cpp", "w") as f:
+            f.write(stub_cpp)
+
         mk = "bootable/recovery/libtar/Android.mk"
         if os.path.exists(mk):
             with open(mk, "r") as f:
                 lines = f.readlines()
             new_lines = []
             for line in lines:
-                if "BUILD_SHARED_LIBRARY" in line:
-                    new_lines.append("LOCAL_LDFLAGS += -Wl,--allow-shlib-undefined -Wl,--unresolved-symbols=ignore-all\n")
+                if "LOCAL_SRC_FILES :=" in line and "append.c" in line:
+                    line = line.rstrip("\n") + " twrp_compat_stubs.cpp\n"
                 new_lines.append(line)
             with open(mk, "w") as f:
                 f.writelines(new_lines)
-            print("=== PATCHED libtar/Android.mk ===")
-            print("".join(new_lines))
         EOF
+
 
         
 
