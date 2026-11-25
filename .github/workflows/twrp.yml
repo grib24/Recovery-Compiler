@@ -114,9 +114,11 @@ jobs:
                 txt = f.read()
             if "libtar.h" not in txt:
                 txt = '#include "libtar.h"\n' + txt
+            txt = txt.replace("lookup_ref_tar(t->th_buf.fep,", "lookup_ref_tar((const uint8_t *)t->th_buf.fep,")
             with open(cfile, "w") as f:
                 f.write(txt)
         EOF
+
 
 
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
