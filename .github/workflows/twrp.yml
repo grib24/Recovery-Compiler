@@ -118,18 +118,18 @@ jobs:
             with open(cfile, "w") as f:
                 f.write(txt)
 
-        for mk in ["bootable/recovery/libtar/Android.mk", "bootable/recovery/Android.mk"]:
-            if os.path.exists(mk):
-                with open(mk, "r") as f:
+        for bp in ["bootable/recovery/libtar/Android.bp", "bootable/recovery/Android.bp"]:
+            if os.path.exists(bp):
+                with open(bp, "r") as f:
                     s = f.read()
-                s = re.sub(r'(include \$\(BUILD_(SHARED_LIBRARY|EXECUTABLE)\))', r'LOCAL_LDFLAGS += -Wl,--allow-shlib-undefined -Wl,--unresolved-symbols=ignore-all\n\1', s)
-                with open(mk, "w") as f:
+                if "ldflags:" in s:
+                    s = re.sub(r'(ldflags:\s*\[)', r'\1"-Wl,--allow-shlib-undefined", "-Wl,--unresolved-symbols=ignore-all", ', s)
+                else:
+                    s = re.sub(r'(name:\s*"(libtar|recovery)",)', r'\1\n    ldflags: ["-Wl,--allow-shlib-undefined", "-Wl,--unresolved-symbols=ignore-all"],', s)
+                with open(bp, "w") as f:
                     f.write(s)
         EOF
-
-
-
-
+        
 
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
         cd ${{ github.event.inputs.DEVICE_PATH }}
