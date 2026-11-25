@@ -78,7 +78,7 @@ jobs:
 
         # Patch bootable/recovery/libtar for twrp-14.1 fscrypt_policy_v2 API compatibility
         python3 - << 'EOF'
-        import glob, re
+        import glob, re, os
 
         hdr_path = "bootable/recovery/libtar/libtar.h"
         with open(hdr_path, "r") as f:
@@ -117,7 +117,20 @@ jobs:
             txt = txt.replace("lookup_ref_tar(t->th_buf.fep,", "lookup_ref_tar((const uint8_t *)t->th_buf.fep,")
             with open(cfile, "w") as f:
                 f.write(txt)
+
+        for mk in ["bootable/recovery/libtar/Android.mk", "bootable/recovery/libtar/Android.bp"]:
+            if os.path.exists(mk):
+                with open(mk, "r") as f:
+                    s = f.read()
+                if mk.endswith(".mk"):
+                    s = s.replace("LOCAL_SHARED_LIBRARIES :=", "LOCAL_SHARED_LIBRARIES := libboot_control_client libsysutils")
+                    s = s.replace("LOCAL_LDFLAGS :=", "LOCAL_LDFLAGS := -Wl,--undefined-version -Wl,--allow-shlib-undefined")
+                    if "LOCAL_LDFLAGS" not in s:
+                        s = s.replace("include $(BUILD_SHARED_LIBRARY)", "LOCAL_LDFLAGS += -Wl,--allow-shlib-undefined\ninclude $(BUILD_SHARED_LIBRARY)")
+                with open(mk, "w") as f:
+                    f.write(s)
         EOF
+
 
 
 
