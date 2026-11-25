@@ -62,10 +62,9 @@ jobs:
     - name: Install build tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc build-essential zip curl libc6-dev libncurses5-dev libssl-dev python3 python3-pip git aria2
-        curl -L https://googleapis.com > repo
-        chmod a+x repo
-        sudo mv repo /usr/local/bin/repo
+        sudo apt-get install -y bc build-essential zip curl libc6-dev libncurses5-dev libssl-dev python3 python3-pip git aria2 repo
+        sudo ln -sf /usr/bin/repo /usr/local/bin/repo
+
 
     - name: Build TWRP
       run: |
