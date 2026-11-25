@@ -76,7 +76,7 @@ jobs:
         /usr/local/bin/repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
         /usr/local/bin/repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch
 
-        # Patch bootable/recovery for twrp-14.1 fscrypt_policy_v2 and lld undefined symbols
+        # Patch bootable/recovery/libtar for twrp-14.1 fscrypt_policy_v2 API compatibility
         python3 - << 'EOF'
         import glob, re, os
 
@@ -118,17 +118,21 @@ jobs:
             with open(cfile, "w") as f:
                 f.write(txt)
 
-        for bp in ["bootable/recovery/libtar/Android.bp", "bootable/recovery/Android.bp"]:
-            if os.path.exists(bp):
-                with open(bp, "r") as f:
-                    s = f.read()
-                if "ldflags:" in s:
-                    s = re.sub(r'(ldflags:\s*\[)', r'\1"-Wl,--allow-shlib-undefined", "-Wl,--unresolved-symbols=ignore-all", ', s)
-                else:
-                    s = re.sub(r'(name:\s*"(libtar|recovery)",)', r'\1\n    ldflags: ["-Wl,--allow-shlib-undefined", "-Wl,--unresolved-symbols=ignore-all"],', s)
-                with open(bp, "w") as f:
-                    f.write(s)
+        mk = "bootable/recovery/libtar/Android.mk"
+        if os.path.exists(mk):
+            with open(mk, "r") as f:
+                lines = f.readlines()
+            new_lines = []
+            for line in lines:
+                if "BUILD_SHARED_LIBRARY" in line:
+                    new_lines.append("LOCAL_LDFLAGS += -Wl,--allow-shlib-undefined -Wl,--unresolved-symbols=ignore-all\n")
+                new_lines.append(line)
+            with open(mk, "w") as f:
+                f.writelines(new_lines)
+            print("=== PATCHED libtar/Android.mk ===")
+            print("".join(new_lines))
         EOF
+
         
 
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
