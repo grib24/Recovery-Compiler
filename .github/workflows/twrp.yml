@@ -76,7 +76,7 @@ jobs:
         /usr/local/bin/repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
         /usr/local/bin/repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch
 
-        # Patch bootable/recovery/libtar for twrp-14.1 fscrypt_policy_v1 API compatibility
+        # Patch bootable/recovery/libtar for twrp-14.1 fscrypt_policy_v2 API compatibility
         python3 - << 'EOF'
         import glob, re
 
@@ -85,20 +85,25 @@ jobs:
             hdr = f.read()
 
         compat = """
+        #ifndef LIBTAR_FSCRYPT_COMPAT
+        #define LIBTAR_FSCRYPT_COMPAT
         #include <linux/fscrypt.h>
         #include <stdint.h>
         #include <stddef.h>
+        #include <stdbool.h>
         #ifdef fscrypt_policy
         #undef fscrypt_policy
         #endif
-        typedef struct fscrypt_policy_v1 fscrypt_policy;
-        static inline size_t fscrypt_policy_size(const fscrypt_policy *p) { (void)p; return sizeof(struct fscrypt_policy_v1); }
+        typedef struct fscrypt_policy_v2 fscrypt_policy;
+        static inline size_t fscrypt_policy_size(const fscrypt_policy *p) { (void)p; return sizeof(struct fscrypt_policy_v2); }
+        static inline size_t get_policy_size(const fscrypt_policy *p, bool v1) { (void)p; (void)v1; return sizeof(struct fscrypt_policy_v2); }
         static inline void *get_policy(fscrypt_policy *p) { return (void *)p; }
-        static inline uint8_t *get_policy_descriptor(fscrypt_policy *p) { return p->master_key_descriptor; }
+        static inline uint8_t *get_policy_descriptor(fscrypt_policy *p) { return p->master_key_identifier; }
+        #endif
         """
 
         hdr = re.sub(r'(#include\s+<fscrypt/fscrypt\.h>)', r'\1\n' + compat, hdr, count=1)
-        if compat not in hdr:
+        if "LIBTAR_FSCRYPT_COMPAT" not in hdr:
             hdr = compat + "\n" + hdr
 
         with open(hdr_path, "w") as f:
@@ -112,6 +117,7 @@ jobs:
             with open(cfile, "w") as f:
                 f.write(txt)
         EOF
+
 
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
         cd ${{ github.event.inputs.DEVICE_PATH }}
