@@ -77,7 +77,74 @@ jobs:
         /usr/local/bin/repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch
 
 
-        # Full legacy cryptfs.h FDE stubs for all bootable/recovery C++ files
+        # Patch bootable/recovery for twrp-14.1 fscrypt_policy_v2 and full legacy FDE cryptfs API
+        python3 - << 'EOF'
+        import glob, re, os
+
+        hdr_path = "bootable/recovery/libtar/libtar.h"
+        with open(hdr_path, "r") as f:
+            hdr = f.read()
+
+        compat = """
+        #ifndef LIBTAR_FSCRYPT_COMPAT
+        #define LIBTAR_FSCRYPT_COMPAT
+        #include <linux/fscrypt.h>
+        #include <stdint.h>
+        #include <stddef.h>
+        #include <stdbool.h>
+        #ifdef fscrypt_policy
+        #undef fscrypt_policy
+        #endif
+        typedef struct fscrypt_policy_v2 fscrypt_policy;
+        static inline size_t fscrypt_policy_size(const fscrypt_policy *p) { (void)p; return sizeof(struct fscrypt_policy_v2); }
+        static inline size_t get_policy_size(const fscrypt_policy *p, bool v1) { (void)p; (void)v1; return sizeof(struct fscrypt_policy_v2); }
+        static inline void *get_policy(fscrypt_policy *p) { return (void *)p; }
+        static inline uint8_t *get_policy_descriptor(fscrypt_policy *p) { return p->master_key_identifier; }
+        #endif
+        """
+
+        hdr = re.sub(r'(#include\s+<fscrypt/fscrypt\.h>)', r'\1\n' + compat, hdr, count=1)
+        if "LIBTAR_FSCRYPT_COMPAT" not in hdr:
+            hdr = compat + "\n" + hdr
+
+        with open(hdr_path, "w") as f:
+            f.write(hdr)
+
+        for cfile in glob.glob("bootable/recovery/libtar/*.c"):
+            with open(cfile, "r") as f:
+                txt = f.read()
+            if "libtar.h" not in txt:
+                txt = '#include "libtar.h"\n' + txt
+            txt = txt.replace("lookup_ref_tar(t->th_buf.fep,", "lookup_ref_tar((const uint8_t *)t->th_buf.fep,")
+            with open(cfile, "w") as f:
+                f.write(txt)
+
+        stub_cpp = """
+        #include <stdarg.h>
+        #include <stdint.h>
+        extern "C" int async_safe_format_log(int prio, const char* tag, const char* fmt, ...) { (void)prio; (void)tag; (void)fmt; return 0; }
+        class NetlinkEvent { public: void dump(); const char* findParam(const char* paramName); };
+        void NetlinkEvent::dump() {}
+        const char* NetlinkEvent::findParam(const char*) { return nullptr; }
+        namespace android { namespace hal { class BootControlClient { public: static void* WaitForService(); }; void* BootControlClient::WaitForService() { return nullptr; } } }
+        namespace ndk { class SpAIBinder; }
+        namespace aidl { namespace android { namespace security { namespace maintenance { class IKeystoreMaintenance { public: static void* fromBinder(const ndk::SpAIBinder&); }; void* IKeystoreMaintenance::fromBinder(const ndk::SpAIBinder&) { return nullptr; } } } } }
+        """
+        with open("bootable/recovery/libtar/twrp_compat_stubs.cpp", "w") as f:
+            f.write(stub_cpp)
+
+        mk = "bootable/recovery/libtar/Android.mk"
+        if os.path.exists(mk):
+            with open(mk, "r") as f:
+                lines = f.readlines()
+            new_lines = []
+            for line in lines:
+                if "LOCAL_SRC_FILES :=" in line and "append.c" in line:
+                    line = line.rstrip("\n") + " twrp_compat_stubs.cpp\n"
+                new_lines.append(line)
+            with open(mk, "w") as f:
+                f.writelines(new_lines)
+
         fde_stubs = """
         #ifndef TWRP_FDE_COMPAT_STUBS
         #define TWRP_FDE_COMPAT_STUBS
@@ -116,6 +183,7 @@ jobs:
                 with open(cpp, "w") as f:
                     f.write(fde_stubs + "\n" + c)
         EOF
+
     
 
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ${{ github.event.inputs.DEVICE_PATH }}
